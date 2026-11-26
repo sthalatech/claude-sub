@@ -79,7 +79,7 @@ cat <<EOF
 claude-sub is installed.
 
   Sign in (once per VM):   ${PUBLIC_URL}
-  After signing in, Shelley's model picker shows: Claude (subscription)
+  After signing in, Shelley's model picker shows: Claude Opus (subscription)
 
   Status:                  claude-sub status
   Proxy endpoint:          http://127.0.0.1:${PORT}/v1/messages
