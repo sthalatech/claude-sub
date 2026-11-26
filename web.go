@@ -65,9 +65,10 @@ func (h *webHandler) handleExchange(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	code, state := raw, ""
-	if i := strings.LastIndex(raw, "#"); i > 0 {
-		code, state = raw[:i], raw[i+1:]
+	code, state := parseCallback(raw)
+	if code == "" {
+		http.Redirect(w, r, "/?err="+urlQuery("could not find a code in that paste"), http.StatusFound)
+		return
 	}
 
 	verifier, ok := h.logins.take(state)
@@ -117,13 +118,38 @@ func (h *webHandler) handleImport(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	pasted := strings.TrimSpace(r.FormValue("state"))
+	ctx := r.Context()
+
+	// A raw OAuth access token (sk-ant-oat01-...) is accepted too.
+	if pasted != "" && !strings.HasPrefix(pasted, "{") {
+		ids, err := verifyAccessToken(ctx, pasted)
+		if err != nil {
+			http.Redirect(w, r, "/?err="+urlQuery(err.Error()), http.StatusFound)
+			return
+		}
+		if err := h.store.SetTokens(Tokens{
+			AccessToken: pasted,
+			ExpiresAt:   time.Now().Add(365 * 24 * time.Hour).UTC(),
+			Scopes:      defaultScope,
+			ClientID:    h.clientID,
+			Source:      "pasted-token",
+		}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		h.store.setSubscription(h.clientID, strings.Join(ids, " "))
+		http.Redirect(w, r, "/?ok=1", http.StatusFound)
+		return
+	}
+
 	var t Tokens
-	if err := json.Unmarshal([]byte(strings.TrimSpace(r.FormValue("state"))), &t); err != nil {
+	if err := json.Unmarshal([]byte(pasted), &t); err != nil {
 		http.Redirect(w, r, "/?err="+urlQuery("could not parse that JSON: "+err.Error()), http.StatusFound)
 		return
 	}
-	if t.RefreshToken == "" {
-		http.Redirect(w, r, "/?err="+urlQuery("that JSON has no refresh_token"), http.StatusFound)
+	if t.RefreshToken == "" && t.AccessToken == "" {
+		http.Redirect(w, r, "/?err="+urlQuery("that JSON has no token"), http.StatusFound)
 		return
 	}
 	t.Source = "imported"
@@ -263,6 +289,15 @@ var pageTmpl = template.Must(template.New("page").Parse(`<!doctype html>
   </form>
   <p style="color:#6b7280;margin:.9rem 0 0">Already signed in with the <code>claude</code> CLI on this VM?
      <code>claude setup-token</code> writes credentials the proxy picks up automatically.</p>
+  <details style="margin-top:.9rem">
+    <summary>I already have a token</summary>
+    <p style="color:#6b7280">Paste an OAuth access token (<code>sk-ant-oat01-&hellip;</code>) or a token bundle. It is
+       checked against Anthropic before it is stored.</p>
+    <form method="post" action="/import">
+      <textarea name="state" placeholder="sk-ant-oat01-..."></textarea>
+      <div class="row" style="margin-top:.7rem"><button class="ghost" type="submit">Use this token</button></div>
+    </form>
+  </details>
 </div>
 {{end}}
 

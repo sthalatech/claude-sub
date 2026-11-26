@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -49,11 +50,46 @@ type loginSession struct {
 }
 
 type loginStore struct {
-	mu sync.Mutex
-	m  map[string]loginSession
+	mu   sync.Mutex
+	m    map[string]loginSession
+	path string // persisted so a restart does not strand a code the user holds
 }
 
-func newLoginStore() *loginStore { return &loginStore{m: map[string]loginSession{}} }
+func newLoginStore(path string) *loginStore {
+	l := &loginStore{m: map[string]loginSession{}, path: path}
+	l.load()
+	return l
+}
+
+func (l *loginStore) load() {
+	if l.path == "" {
+		return
+	}
+	b, err := os.ReadFile(l.path)
+	if err != nil {
+		return
+	}
+	var m map[string]loginSession
+	if json.Unmarshal(b, &m) != nil {
+		return
+	}
+	for k, v := range m {
+		if time.Since(v.created) < 30*time.Minute {
+			l.m[k] = v
+		}
+	}
+}
+
+func (l *loginStore) saveLocked() {
+	if l.path == "" {
+		return
+	}
+	b, err := json.Marshal(l.m)
+	if err != nil {
+		return
+	}
+	_ = os.WriteFile(l.path, b, 0o600)
+}
 
 func (l *loginStore) put(state, verifier string) {
 	l.mu.Lock()
@@ -64,16 +100,37 @@ func (l *loginStore) put(state, verifier string) {
 		}
 	}
 	l.m[state] = loginSession{verifier: verifier, created: time.Now()}
+	l.saveLocked()
 }
 
+// take returns the verifier for a state, falling back to the only pending
+// session when the caller pasted a bare code or a state we no longer match.
 func (l *loginStore) take(state string) (string, bool) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	v, ok := l.m[state]
-	if ok {
+	if v, ok := l.m[state]; ok && time.Since(v.created) < 30*time.Minute {
 		delete(l.m, state)
+		l.saveLocked()
+		return v.verifier, true
 	}
-	return v.verifier, ok
+	var (
+		onlyState string
+		only      loginSession
+		n         int
+	)
+	for k, v := range l.m {
+		if time.Since(v.created) > 30*time.Minute {
+			delete(l.m, k)
+			continue
+		}
+		onlyState, only, n = k, v, n+1
+	}
+	if n == 1 {
+		delete(l.m, onlyState)
+		l.saveLocked()
+		return only.verifier, true
+	}
+	return "", false
 }
 
 func randB64(n int) (string, error) {
@@ -298,4 +355,69 @@ func (s *Store) refresh(ctx context.Context) (string, error) {
 		return tr.AccessToken, nil
 	}
 	return tr.AccessToken, nil
+}
+
+// parseCallback accepts a bare code, `code#state`, or the full callback URL
+// Anthropic redirects to, and returns the authorization code and state.
+func parseCallback(raw string) (code, state string) {
+	raw = strings.TrimSpace(raw)
+	if strings.HasPrefix(raw, "http://") || strings.HasPrefix(raw, "https://") {
+		u, err := url.Parse(raw)
+		if err != nil {
+			return "", ""
+		}
+		q := u.Query()
+		return q.Get("code"), q.Get("state")
+	}
+	if i := strings.LastIndex(raw, "#"); i > 0 {
+		return raw[:i], raw[i+1:]
+	}
+	return raw, ""
+}
+
+// verifyAccessToken checks a token against the upstream models endpoint.
+func verifyAccessToken(ctx context.Context, tok string) ([]string, error) {
+	tok = strings.TrimPrefix(strings.TrimSpace(tok), "Bearer ")
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiBaseURL+"/v1/models?limit=100", nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+tok)
+	req.Header.Set("anthropic-version", "2023-06-01")
+	req.Header.Set("anthropic-beta", oauthBeta)
+	req.Header.Set("User-Agent", defaultUA)
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode/100 != 2 {
+		return nil, fmt.Errorf("that token was rejected (HTTP %d): %s", resp.StatusCode, strings.TrimSpace(string(raw)))
+	}
+	var page struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &page); err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(page.Data))
+	for _, m := range page.Data {
+		ids = append(ids, m.ID)
+	}
+	return ids, nil
+}
+
+// setSubscription records what the token can see (used for the status page).
+func (s *Store) setSubscription(clientID, note string) {
+	_ = s.updateLocked(func(t *Tokens) {
+		if t.ClientID == "" {
+			t.ClientID = clientID
+		}
+		if note != "" {
+			t.Subscription = "models: " + note
+		}
+	})
 }

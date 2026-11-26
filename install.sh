@@ -61,7 +61,8 @@ render "$SRC/deploy/claude-sub.service" /etc/systemd/system/claude-sub.service
 render "$SRC/deploy/claude-sub-register.service" /etc/systemd/system/claude-sub-register.service
 
 systemctl daemon-reload
-systemctl enable --now claude-sub.service >/dev/null
+systemctl enable claude-sub.service >/dev/null 2>&1
+systemctl restart claude-sub.service >/dev/null
 
 echo "==> service started"
 if [ "$REGISTER" = 1 ]; then

@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -35,7 +36,7 @@ func runServe(args []string) error {
 		log.Printf("imported credentials from the Claude Code CLI")
 	}
 
-	logins := newLoginStore()
+	logins := newLoginStore(store.Dir() + "/pending.json")
 	showURL := *publicURL
 	if showURL == "" {
 		showURL = "http://127.0.0.1" + portOf(*addr) + "/"
@@ -170,5 +171,42 @@ func runModels(args []string) error {
 	for _, id := range ids {
 		fmt.Println(id)
 	}
+	return nil
+}
+
+func runUseToken(args []string) error {
+	fs := flag.NewFlagSet("use-token", flag.ExitOnError)
+	state := fs.String("state", "", "state directory")
+	_ = fs.Parse(args)
+
+	raw, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		return err
+	}
+	tok := strings.TrimSpace(string(raw))
+	if tok == "" {
+		return fmt.Errorf("pass the token on stdin, e.g. claude setup-token | claude-sub use-token")
+	}
+	store, err := NewStore(stateDir(nil, *state))
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	ids, err := verifyAccessToken(ctx, tok)
+	if err != nil {
+		return err
+	}
+	if err := store.SetTokens(Tokens{
+		AccessToken: strings.TrimPrefix(tok, "Bearer "),
+		ExpiresAt:   time.Now().Add(365 * 24 * time.Hour).UTC(),
+		Scopes:      defaultScope,
+		ClientID:    defaultClientID,
+		Source:      "pasted-token",
+	}); err != nil {
+		return err
+	}
+	store.setSubscription(defaultClientID, strings.Join(ids, " "))
+	fmt.Printf("token accepted; %d models available\\n", len(ids))
 	return nil
 }

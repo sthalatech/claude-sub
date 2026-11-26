@@ -31,6 +31,8 @@ func main() {
 		err = runStatus(args)
 	case "models":
 		err = runModels(args)
+	case "use-token":
+		err = runUseToken(args)
 	case "logout":
 		err = runLogout(args)
 	case "version", "-v", "--version":
@@ -54,6 +56,7 @@ Usage:
   claude-sub register  [flags]   register the model with a local Shelley
   claude-sub models    [flags]   list models the subscription can call
   claude-sub status    [flags]   show login state
+  claude-sub use-token [flags]   store an OAuth access token read from stdin
   claude-sub logout    [flags]   forget the stored tokens
 
 Run 'claude-sub <command> -h' for command flags.
