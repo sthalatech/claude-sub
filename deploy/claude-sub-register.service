@@ -1,0 +1,19 @@
+[Unit]
+Description=Register the Claude subscription model with the local Shelley
+Documentation=https://github.com/sthalatech/claude-sub
+After=claude-sub.service shelley.service
+Wants=claude-sub.service
+
+[Service]
+Type=oneshot
+User=@LOGIN_USER@
+Group=@LOGIN_GROUP@
+StateDirectory=claude-sub
+Environment=CLAUDE_SUB_STATE=/var/lib/claude-sub
+ExecStartPre=/bin/sh -c 'for i in $(seq 1 60); do curl -fsS -o /dev/null -H "X-Exedev-Userid: claude-sub" @SHELLEY_URL@/api/models && exit 0; sleep 2; done; exit 1'
+ExecStart=/usr/local/bin/claude-sub register -shelley @SHELLEY_URL@
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

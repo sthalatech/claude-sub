@@ -1,0 +1,22 @@
+[Unit]
+Description=claude-sub: Claude subscription to Anthropic Messages API proxy
+Documentation=https://github.com/sthalatech/claude-sub
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@LOGIN_USER@
+Group=@LOGIN_GROUP@
+StateDirectory=claude-sub
+Environment=CLAUDE_SUB_STATE=/var/lib/claude-sub
+ExecStart=/usr/local/bin/claude-sub serve -addr :@PORT@ -public-url @PUBLIC_URL@
+Restart=always
+RestartSec=2
+NoNewPrivileges=yes
+ProtectSystem=full
+ProtectHome=read-only
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
