@@ -14,8 +14,15 @@ gateway.
    header, and the Claude Code system-prompt preamble those credentials
    require.
 
-Shelley reaches it as a *custom model*, so `Claude (subscription)` appears in
-the model picker next to the managed models.
+Shelley reaches it as a *custom model*, so `Claude Opus (subscription)` (and
+any siblings you register) appears in the model picker next to the managed
+models.
+
+Two quirks of Shelley's custom-model support, handled here:
+
+- Shelley stores a custom model's `endpoint` verbatim and POSTs straight to it,
+  so register the full URL: `http://127.0.0.1:8788/v1/messages`.
+- The proxy also accepts `POST /` for registrations that point at the root.
 
 > **Caveat.** Subscription OAuth credentials are meant for Claude Code. Using
 them from another client is not sanctioned by Anthropic's terms and can be
@@ -91,7 +98,7 @@ service is only needed for the system-prompt shim.
 
 ```
 claude-sub serve     run proxy + login page (systemd does this for you)
-claude-sub register  add/replace the custom model in Shelley
+claude-sub register  add/replace the custom model in Shelley (defaults: newest Opus, "Claude Opus (subscription)")
 claude-sub models    list model ids the subscription can call
 claude-sub status    show login state
 claude-sub logout    forget stored tokens

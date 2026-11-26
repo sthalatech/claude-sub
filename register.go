@@ -21,9 +21,9 @@ func runRegister(args []string) error {
 	shelley := fs.String("shelley", "http://127.0.0.1:9999", "Shelley base URL")
 	user := fs.String("user", "claude-sub", "value for the X-Exedev-Userid header")
 	state := fs.String("state", "", "state directory")
-	display := fs.String("display", "Claude (subscription)", "display name in Shelley's model list")
-	modelName := fs.String("model-name", "claude-opus-4-5", "model name forwarded to Anthropic (empty = pick the newest Opus)")
-	endpoint := fs.String("endpoint", "http://127.0.0.1:8788", "claude-sub proxy base URL")
+	display := fs.String("display", "Claude Opus (subscription)", "display name in Shelley's model list")
+	modelName := fs.String("model-name", "", "model name forwarded to Anthropic (empty = pick the newest Opus)")
+	endpoint := fs.String("endpoint", "http://127.0.0.1:8788/v1/messages", "claude-sub proxy URL (Shelley uses this verbatim)")
 	maxTokens := fs.Int64("max-tokens", 200000, "context window recorded in Shelley")
 	_ = fs.Parse(args)
 
@@ -85,10 +85,14 @@ func runRegister(args []string) error {
 		ModelID     string `json:"model_id"`
 		DisplayName string `json:"display_name"`
 		Endpoint    string `json:"endpoint"`
+		ModelName   string `json:"model_name"`
 	}
 	_ = json.Unmarshal(raw, &existing)
 	for _, m := range existing {
-		if m.DisplayName != *display && m.Endpoint != *endpoint {
+		// Replace our own earlier registration of the same display name, or of
+		// the same upstream model behind this endpoint; leave siblings alone.
+		sameModel := m.Endpoint == *endpoint && m.ModelName == upstreamModel
+		if m.DisplayName != *display && !sameModel {
 			continue
 		}
 		if c, r2, err := do(http.MethodDelete, "/api/custom-models/"+m.ModelID, nil); err != nil {

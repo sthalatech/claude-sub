@@ -67,6 +67,17 @@ func addCommonFlags(fs *flag.FlagSet) {
 	fs.String("state", "", "state directory (default `%s`)")
 }
 
+func dirUsable(dir string) bool {
+	f, err := os.CreateTemp(dir, ".perm-check-*")
+	if err != nil {
+		return false
+	}
+	name := f.Name()
+	f.Close()
+	os.Remove(name)
+	return true
+}
+
 func stateDir(fs *flag.FlagSet, explicit string) string {
 	if explicit != "" {
 		return explicit
@@ -75,6 +86,11 @@ func stateDir(fs *flag.FlagSet, explicit string) string {
 		return v
 	}
 	if os.Geteuid() == 0 {
+		return "/var/lib/claude-sub"
+	}
+	// The service keeps its state in /var/lib/claude-sub; a CLI run by the
+	// unit's user should read the same directory.
+	if dirUsable("/var/lib/claude-sub") {
 		return "/var/lib/claude-sub"
 	}
 	if v := os.Getenv("XDG_STATE_HOME"); v != "" {

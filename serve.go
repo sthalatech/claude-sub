@@ -47,7 +47,15 @@ func runServe(args []string) error {
 
 	mux := http.NewServeMux()
 	mux.Handle("/v1/", proxy)
-	mux.Handle("/", web)
+	// Shelley stores a custom model's endpoint verbatim, so some
+	// registrations point straight at the service root.
+	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && (r.URL.Path == "/" || r.URL.Path == "/messages") {
+			proxy.ServeHTTP(w, r)
+			return
+		}
+		web.ServeHTTP(w, r)
+	}))
 
 	srv := &http.Server{
 		Addr:              *addr,

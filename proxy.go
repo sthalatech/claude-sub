@@ -60,6 +60,9 @@ func (p *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			betas = append(betas, extra)
 		}
 		req.Header.Set("anthropic-beta", strings.Join(betas, ","))
+		if req.Header.Get("anthropic-version") == "" {
+			req.Header.Set("anthropic-version", "2023-06-01")
+		}
 		if req.Header.Get("User-Agent") == "" || strings.HasPrefix(req.Header.Get("User-Agent"), "Go-http") {
 			req.Header.Set("User-Agent", p.ua)
 		}
