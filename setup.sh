@@ -18,4 +18,4 @@ DIR=$(find "$WORK" -maxdepth 1 -mindepth 1 -type d | head -n1)
 
 SUDO=""
 [ "$(id -u)" -eq 0 ] || SUDO="sudo"
-$SUDO sh "$DIR/install.sh"
+$SUDO sh "$DIR/install.sh" ${CLAUDE_SUB_VAULT:+--vault "$CLAUDE_SUB_VAULT"}

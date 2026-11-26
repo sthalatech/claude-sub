@@ -75,6 +75,44 @@ for vm in $(ssh exe.dev list --json | jq -r '.[].name'); do
 done
 ```
 
+### The token vault (sign in once, ever)
+
+The login lives in `/var/lib/claude-sub/state.json` on whatever VM signed in, so
+losing that VM would mean signing in again. Point claude-sub at a private git
+repository instead and the login survives:
+
+```sh
+sudo sh install.sh --vault https://github.int.exe.xyz/<you>/claude-sub-vault.git
+```
+
+`--vault` clones the repo into `/var/lib/claude-sub/vault`; if the VM has no
+login yet the tokens are restored from it. A systemd timer
+(`claude-sub-vault.timer`, every 10 minutes) pushes the tokens back after any
+refresh, and a fresh login pushes immediately.
+
+Give VMs access to the private repo with an exe.dev GitHub integration, so no
+credential ever sits on a VM:
+
+```sh
+ssh exe.dev integrations add github --name claude-vault \
+  --repository <you>/claude-sub-vault --attach auto:all
+```
+
+Then make the vault-backed installer the account-wide first-boot script:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/sthalatech/claude-sub/main/setup-vault.sh \
+  | ssh exe.dev defaults write dev.exe new.setup-script
+```
+
+A new VM now boots with claude-sub installed, the model registered, and the
+existing login restored: no browser, no per-VM sign-in, and the credential
+outlives any single VM.
+
+Treat the vault repo like a password: read access to it is the ability to use
+your Claude subscription. Sign out and back in (`claude-sub logout`, then the
+login page) to rotate it, which rewrites `state.json`.
+
 ### Truly zero-touch (no per-VM sign-in)
 
 Hold the subscription credential at the exe.dev edge instead of on the VM, as a
@@ -101,6 +139,7 @@ claude-sub serve     run proxy + login page (systemd does this for you)
 claude-sub register  add/replace the custom model in Shelley (defaults: newest Opus, "Claude Opus (subscription)")
 claude-sub models    list model ids the subscription can call
 claude-sub status    show login state
+claude-sub vault-sync publish tokens to the vault (or --restore from it)
 claude-sub logout    forget stored tokens
 ```
 

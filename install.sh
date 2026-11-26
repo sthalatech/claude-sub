@@ -8,12 +8,15 @@ set -eu
 
 PORT=${CLAUDE_SUB_PORT:-8788}
 SHELLEY_URL=${CLAUDE_SUB_SHELLEY:-http://127.0.0.1:9999}
+VAULT=${CLAUDE_SUB_VAULT:-}
 REGISTER=1
 
 for arg in "$@"; do
 	case "$arg" in
 	--no-register) REGISTER=0 ;;
 	--port=*) PORT=${arg#*=} ;;
+	--vault=*) VAULT=${arg#*=} ;;
+	--no-vault) VAULT= ;;
 	*) echo "unknown argument: $arg" >&2; exit 2 ;;
 	esac
 done
@@ -60,9 +63,32 @@ render() {
 render "$SRC/deploy/claude-sub.service" /etc/systemd/system/claude-sub.service
 render "$SRC/deploy/claude-sub-register.service" /etc/systemd/system/claude-sub-register.service
 
+render "$SRC/deploy/claude-sub-vault.service" /etc/systemd/system/claude-sub-vault.service
+render "$SRC/deploy/claude-sub-vault.timer" /etc/systemd/system/claude-sub-vault.timer
+
+STATE_DIR=/var/lib/claude-sub
+if [ -n "$VAULT" ]; then
+	echo "==> token vault: $VAULT"
+	if [ ! -d "$STATE_DIR/vault/.git" ]; then
+		install -d -o "$LOGIN_USER" -g "$LOGIN_GROUP" -m 0700 "$STATE_DIR"
+		rm -rf "$STATE_DIR/vault"
+		if ! runuser -u "$LOGIN_USER" -- git clone -q "$VAULT" "$STATE_DIR/vault"; then
+			echo "    could not clone the vault yet (is the GitHub integration attached?)" >&2
+			rm -rf "$STATE_DIR/vault"
+		fi
+	fi
+fi
+
 systemctl daemon-reload
 systemctl enable claude-sub.service >/dev/null 2>&1
 systemctl restart claude-sub.service >/dev/null
+
+if [ -d "$STATE_DIR/vault/.git" ]; then
+	runuser -u "$LOGIN_USER" -- /usr/local/bin/claude-sub vault-sync --restore >/dev/null 2>&1 || true
+	systemctl enable --now claude-sub-vault.timer >/dev/null 2>&1 && echo "==> vault sync timer enabled"
+else
+	systemctl disable --now claude-sub-vault.timer >/dev/null 2>&1 || true
+fi
 
 echo "==> service started"
 if [ "$REGISTER" = 1 ]; then

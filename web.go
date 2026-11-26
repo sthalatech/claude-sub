@@ -16,6 +16,9 @@ type webHandler struct {
 	clientID string
 	scope    string
 	proxyURL string
+	// onTokensChanged runs after a fresh login or import so the vault copy
+	// stays current without waiting for the timer.
+	onTokensChanged func()
 }
 
 func (h *webHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -83,6 +86,7 @@ func (h *webHandler) handleExchange(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/?err="+urlQuery(err.Error()), http.StatusFound)
 		return
 	}
+	h.notify()
 	http.Redirect(w, r, "/?ok=1", http.StatusFound)
 }
 
@@ -139,6 +143,7 @@ func (h *webHandler) handleImport(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.store.setSubscription(h.clientID, strings.Join(ids, " "))
+		h.notify()
 		http.Redirect(w, r, "/?ok=1", http.StatusFound)
 		return
 	}
@@ -157,6 +162,7 @@ func (h *webHandler) handleImport(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	h.notify()
 	http.Redirect(w, r, "/?ok=1", http.StatusFound)
 }
 
@@ -182,6 +188,12 @@ func (h *webHandler) handleStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := pageTmpl.Execute(w, data); err != nil {
 		fmt.Fprintf(w, "template error: %v", err)
+	}
+}
+
+func (h *webHandler) notify() {
+	if h.onTokensChanged != nil {
+		h.onTokensChanged()
 	}
 }
 

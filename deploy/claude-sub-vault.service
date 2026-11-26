@@ -1,0 +1,13 @@
+[Unit]
+Description=claude-sub: publish refreshed tokens to the token vault
+Documentation=https://github.com/sthalatech/claude-sub
+After=claude-sub.service network-online.target
+
+[Service]
+Type=oneshot
+User=@LOGIN_USER@
+Group=@LOGIN_GROUP@
+StateDirectory=claude-sub
+Environment=CLAUDE_SUB_STATE=/var/lib/claude-sub
+ExecStart=/usr/local/bin/claude-sub vault-sync
+TimeoutStartSec=120

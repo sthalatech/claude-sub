@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -23,9 +24,23 @@ func runServe(args []string) error {
 	scope := fs.String("scope", defaultScope, "OAuth scopes to request")
 	ua := fs.String("user-agent", defaultUA, "User-Agent sent upstream")
 	publicURL := fs.String("public-url", "", "URL shown on the login page (informational)")
+	vaultDir := fs.String("vault", "", "token-vault git checkout (default <state>/vault when present)")
 	_ = fs.Parse(args)
 
-	store, err := NewStore(stateDir(nil, *state))
+	dir := stateDir(nil, *state)
+	v, err := openVault(*vaultDir, dir)
+	if err != nil {
+		return err
+	}
+	if v != nil {
+		if done, err := v.Restore(); err != nil {
+			log.Printf("vault restore: %v", err)
+		} else if done {
+			log.Printf("restored tokens from the vault")
+		}
+	}
+
+	store, err := NewStore(dir)
 	if err != nil {
 		return err
 	}
@@ -42,8 +57,23 @@ func runServe(args []string) error {
 		showURL = "http://127.0.0.1" + portOf(*addr) + "/"
 	}
 
+	var vaultMu sync.Mutex
+	publish := func() {
+		if v == nil {
+			return
+		}
+		vaultMu.Lock()
+		defer vaultMu.Unlock()
+		switch status, err := v.Sync(false); {
+		case err != nil:
+			log.Printf("vault push failed: %v", err)
+		case status == "pushed":
+			log.Printf("vault: tokens published")
+		}
+	}
+
 	proxy := &proxyHandler{store: store, upstream: *upstream, ua: *ua}
-	web := &webHandler{store: store, logins: logins, clientID: *clientID, scope: *scope, proxyURL: "http://" + hostPort(*addr) + "/v1/messages"}
+	web := &webHandler{store: store, logins: logins, clientID: *clientID, scope: *scope, proxyURL: "http://" + hostPort(*addr) + "/v1/messages", onTokensChanged: func() { go publish() }}
 
 	mux := http.NewServeMux()
 	mux.Handle("/v1/", proxy)
