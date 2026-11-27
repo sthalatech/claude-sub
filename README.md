@@ -191,7 +191,7 @@ credential lives on the VM; otherwise set `INFISICAL_TOKEN` or
 and points git at the GitHub PAT in Infisical (`/vm-defaults/GH_TOKEN`) via
 `vm-git-credential` (fetched on demand, never stored on disk; `gh` is logged in too).
 
-    curl -fsSL https://raw.githubusercontent.com/sthalatech/claude-sub/main/setup-infisical.sh \
-      | INFISICAL_PROJECT_ID=<id> ssh exe.dev defaults write dev.exe new.setup-script
+    curl -fsSL https://raw.githubusercontent.com/sthalatech/claude-sub/main/bootstrap.sh \
+      | ssh exe.dev defaults write dev.exe new.setup-script
 
 To seed from an already signed-in VM: put the env file in place, run `claude-sub vault-sync`.

@@ -2,8 +2,11 @@
 # exe.dev first-boot entry point: install claude-sub backed by Infisical, and
 # give the VM git access through the GitHub PAT stored in Infisical.
 #
-#   curl -fsSL https://raw.githubusercontent.com/sthalatech/claude-sub/main/setup-infisical.sh \
+#   curl -fsSL https://raw.githubusercontent.com/sthalatech/claude-sub/main/bootstrap.sh \
 #     | ssh exe.dev defaults write dev.exe new.setup-script
+# (bootstrap.sh just fetches this script, so later fixes apply without re-registering.
+#  Output is logged to /var/log/vm-setup.log. Note: a VAR=x prefix on the ssh command
+#  does not reach the script; the project id default below is baked in.)
 #
 # Prerequisite (once): an exe.dev integration that fronts Infisical privately,
 # attached to your VMs (auto:all or a tag), e.g.
@@ -16,7 +19,7 @@
 set -eu
 
 INFISICAL_URL=${INFISICAL_URL:-https://infisical.int.exe.xyz}
-INFISICAL_PROJECT_ID=${INFISICAL_PROJECT_ID:?set INFISICAL_PROJECT_ID (or bake it into this script)}
+INFISICAL_PROJECT_ID=${INFISICAL_PROJECT_ID:-27479f9b-14ec-4fe5-bbe7-98416cf4554a}
 INFISICAL_ENVIRONMENT=${INFISICAL_ENVIRONMENT:-prod}
 REPO=${CLAUDE_SUB_REPO:-sthalatech/claude-sub}
 TAG=${CLAUDE_SUB_TAG:-main}

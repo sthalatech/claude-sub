@@ -46,7 +46,13 @@ echo "==> installing binary"
 if [ -x "$SRC/claude-sub" ] && [ "${CLAUDE_SUB_REBUILD:-0}" != 1 ]; then
 	install -m 0755 "$SRC/claude-sub" /usr/local/bin/claude-sub
 else
-	command -v go >/dev/null 2>&1 || { echo "go is required to build claude-sub" >&2; exit 1; }
+	if ! command -v go >/dev/null 2>&1; then
+		echo "    go not found; fetching a temporary toolchain"
+		case "$(uname -m)" in x86_64) GOARCH=amd64 ;; aarch64|arm64) GOARCH=arm64 ;; *) echo "unsupported arch" >&2; exit 1 ;; esac
+		GOTMP=$(mktemp -d)
+		curl -fsSL "https://go.dev/dl/go1.24.6.linux-$GOARCH.tar.gz" | tar -xz -C "$GOTMP"
+		export PATH="$GOTMP/go/bin:$PATH" GOCACHE="$GOTMP/cache" GOTOOLCHAIN=local
+	fi
 	(cd "$SRC" && go build -trimpath -ldflags=-s -o /tmp/claude-sub.build .)
 	install -m 0755 /tmp/claude-sub.build /usr/local/bin/claude-sub
 	rm -f /tmp/claude-sub.build
