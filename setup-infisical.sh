@@ -83,10 +83,20 @@ if GH_TOKEN_VALUE=$(/usr/local/bin/vm-secret GH_TOKEN) && [ -n "$GH_TOKEN_VALUE"
 	# Fetched on demand by git; never stored on disk.
 	$SUDO git config --system credential.https://github.com.helper '!/usr/local/bin/vm-git-credential'
 	if command -v gh >/dev/null 2>&1; then
-		printf '%s' "$GH_TOKEN_VALUE" | runuser -u "$LOGIN_USER" -- gh auth login --with-token >/dev/null 2>&1 || true
+		printf '%s' "$GH_TOKEN_VALUE" | $SUDO runuser -u "$LOGIN_USER" -- gh auth login --with-token >/dev/null 2>&1 || true
 	fi
 	echo "    git (and gh) now use the PAT from Infisical"
 else
 	echo "    could not read /vm-defaults/GH_TOKEN (is the Infisical integration attached?)" >&2
 fi
+echo "setup: Shelley skills"
+LOGIN_HOME=$(getent passwd "$LOGIN_USER" | cut -d: -f6)
+for d in "$DIR"/skills/*/; do
+	[ -f "$d/SKILL.md" ] || continue
+	n=$(basename "$d")
+	$SUDO mkdir -p "$LOGIN_HOME/.config/agents/skills/$n"
+	$SUDO cp -r "$d". "$LOGIN_HOME/.config/agents/skills/$n/"
+	$SUDO chown -R "$LOGIN_USER:$LOGIN_GROUP" "$LOGIN_HOME/.config/agents/skills/$n"
+	echo "    skill: $n"
+done
 echo "setup: done"
