@@ -195,3 +195,8 @@ and points git at the GitHub PAT in Infisical (`/vm-defaults/GH_TOKEN`) via
       | ssh exe.dev defaults write dev.exe new.setup-script
 
 To seed from an already signed-in VM: put the env file in place, run `claude-sub vault-sync`.
+
+### Extra accounts and providers (setup-infisical.sh)
+
+- **Personal Claude account:** a second instance (`CLAUDE_SUB_INSTANCE=personal`, port 8789, state `/var/lib/claude-sub-personal`, secret `state_json_personal`, model "Claude Opus (personal)"). Sign in once at `https://<vm>.exe.xyz:8789/`; every other VM then restores it. Status: `CLAUDE_SUB_STATE=/var/lib/claude-sub-personal claude-sub status`.
+- **Ollama Cloud:** `claude-sub register-openai` registers the models in `ollama-models.json` using `/vm-defaults/OLLAMA_API_KEY` from Infisical.

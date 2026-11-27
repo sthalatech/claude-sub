@@ -1,5 +1,5 @@
 [Unit]
-Description=claude-sub: keep the token vault current
+Description=claude-sub@SFX@: keep the token vault current
 
 [Timer]
 OnBootSec=5min

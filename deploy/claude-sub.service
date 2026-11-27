@@ -1,5 +1,5 @@
 [Unit]
-Description=claude-sub: Claude subscription to Anthropic Messages API proxy
+Description=claude-sub@SFX@: Claude subscription to Anthropic Messages API proxy
 Documentation=https://github.com/sthalatech/claude-sub
 After=network-online.target
 Wants=network-online.target
@@ -8,9 +8,10 @@ Wants=network-online.target
 Type=simple
 User=@LOGIN_USER@
 Group=@LOGIN_GROUP@
-StateDirectory=claude-sub
-Environment=CLAUDE_SUB_STATE=/var/lib/claude-sub
+StateDirectory=claude-sub@SFX@
+Environment=CLAUDE_SUB_STATE=/var/lib/claude-sub@SFX@
 EnvironmentFile=-/etc/claude-sub/infisical.env
+Environment=INFISICAL_SECRET_NAME=@SECRET_NAME@
 ExecStart=/usr/local/bin/claude-sub serve -addr :@PORT@ -public-url @PUBLIC_URL@
 Restart=always
 RestartSec=2

@@ -11,6 +11,12 @@ SHELLEY_URL=${CLAUDE_SUB_SHELLEY:-http://127.0.0.1:9999}
 VAULT=${CLAUDE_SUB_VAULT:-}
 REGISTER=1
 INFISICAL=0
+# A second login (e.g. a personal account) runs as its own instance:
+#   CLAUDE_SUB_INSTANCE=personal CLAUDE_SUB_PORT=8789 CLAUDE_SUB_DISPLAY="Claude Opus (personal)" sh install.sh --infisical
+INSTANCE=${CLAUDE_SUB_INSTANCE:-}
+SFX=""; SECRET_NAME=state_json
+if [ -n "$INSTANCE" ]; then SFX="-$INSTANCE"; SECRET_NAME="state_json_$INSTANCE"; fi
+DISPLAY_NAME=${CLAUDE_SUB_DISPLAY:-Claude Opus (subscription)}
 
 for arg in "$@"; do
 	case "$arg" in
@@ -65,16 +71,19 @@ render() {
 		-e "s|@PORT@|$PORT|g" \
 		-e "s|@PUBLIC_URL@|$PUBLIC_URL|g" \
 		-e "s|@SHELLEY_URL@|$SHELLEY_URL|g" \
+		-e "s|@SFX@|$SFX|g" \
+		-e "s|@DISPLAY@|$DISPLAY_NAME|g" \
+		-e "s|@SECRET_NAME@|$SECRET_NAME|g" \
 		"$1" >"$2"
 	chmod 0644 "$2"
 }
-render "$SRC/deploy/claude-sub.service" /etc/systemd/system/claude-sub.service
-render "$SRC/deploy/claude-sub-register.service" /etc/systemd/system/claude-sub-register.service
+render "$SRC/deploy/claude-sub.service" /etc/systemd/system/claude-sub$SFX.service
+render "$SRC/deploy/claude-sub-register.service" /etc/systemd/system/claude-sub-register$SFX.service
 
-render "$SRC/deploy/claude-sub-vault.service" /etc/systemd/system/claude-sub-vault.service
-render "$SRC/deploy/claude-sub-vault.timer" /etc/systemd/system/claude-sub-vault.timer
+render "$SRC/deploy/claude-sub-vault.service" /etc/systemd/system/claude-sub-vault$SFX.service
+render "$SRC/deploy/claude-sub-vault.timer" /etc/systemd/system/claude-sub-vault$SFX.timer
 
-STATE_DIR=/var/lib/claude-sub
+STATE_DIR=/var/lib/claude-sub$SFX
 if [ -n "$VAULT" ]; then
 	echo "==> token vault: $VAULT"
 	if [ ! -d "$STATE_DIR/vault/.git" ]; then
@@ -93,23 +102,23 @@ if [ "$INFISICAL" = 1 ] && [ ! -r /etc/claude-sub/infisical.env ]; then
 fi
 
 systemctl daemon-reload
-systemctl enable claude-sub.service >/dev/null 2>&1
-systemctl restart claude-sub.service >/dev/null
+systemctl enable claude-sub$SFX.service >/dev/null 2>&1
+systemctl restart claude-sub$SFX.service >/dev/null
 
 if [ "$INFISICAL" = 1 ]; then
-	runuser -u "$LOGIN_USER" -- env CLAUDE_SUB_STATE="$STATE_DIR" sh -c '. /etc/claude-sub/infisical.env; export INFISICAL_URL INFISICAL_PROJECT_ID INFISICAL_ENVIRONMENT INFISICAL_TOKEN INFISICAL_CLIENT_ID INFISICAL_CLIENT_SECRET; /usr/local/bin/claude-sub vault-sync --restore' || true
-	systemctl restart claude-sub.service >/dev/null
-	systemctl enable --now claude-sub-vault.timer >/dev/null 2>&1 && echo "==> Infisical sync timer enabled"
+	runuser -u "$LOGIN_USER" -- env CLAUDE_SUB_STATE="$STATE_DIR" INFISICAL_SECRET_NAME="$SECRET_NAME" sh -c '. /etc/claude-sub/infisical.env; export INFISICAL_SECRET_NAME INFISICAL_URL INFISICAL_PROJECT_ID INFISICAL_ENVIRONMENT INFISICAL_TOKEN INFISICAL_CLIENT_ID INFISICAL_CLIENT_SECRET; /usr/local/bin/claude-sub vault-sync --restore' || true
+	systemctl restart claude-sub$SFX.service >/dev/null
+	systemctl enable --now claude-sub-vault$SFX.timer >/dev/null 2>&1 && echo "==> Infisical sync timer enabled"
 elif [ -d "$STATE_DIR/vault/.git" ]; then
 	runuser -u "$LOGIN_USER" -- /usr/local/bin/claude-sub vault-sync --restore >/dev/null 2>&1 || true
-	systemctl enable --now claude-sub-vault.timer >/dev/null 2>&1 && echo "==> vault sync timer enabled"
+	systemctl enable --now claude-sub-vault$SFX.timer >/dev/null 2>&1 && echo "==> vault sync timer enabled"
 else
-	systemctl disable --now claude-sub-vault.timer >/dev/null 2>&1 || true
+	systemctl disable --now claude-sub-vault$SFX.timer >/dev/null 2>&1 || true
 fi
 
 echo "==> service started"
 if [ "$REGISTER" = 1 ]; then
-	if systemctl enable --now claude-sub-register.service >/dev/null 2>&1; then
+	if systemctl enable --now --no-block claude-sub-register$SFX.service >/dev/null 2>&1; then
 		echo "==> model registered with Shelley"
 	else
 		echo "==> could not register the model with Shelley yet (Shelley not reachable?)"
@@ -121,9 +130,9 @@ cat <<EOF
 
 claude-sub is installed.
 
-  Sign in (once per VM):   ${PUBLIC_URL}
-  After signing in, Shelley's model picker shows: Claude Opus (subscription)
+  Sign in (once, then it syncs): ${PUBLIC_URL}
+  After signing in, Shelley's model picker shows: ${DISPLAY_NAME}
 
-  Status:                  claude-sub status
+  Status:                  CLAUDE_SUB_STATE=$STATE_DIR claude-sub status
   Proxy endpoint:          http://127.0.0.1:${PORT}/v1/messages
 EOF

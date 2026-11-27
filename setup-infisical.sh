@@ -15,7 +15,9 @@
 #     --peer --bearer=- --attach auto:all
 # Secrets (Infisical, env $INFISICAL_ENVIRONMENT):
 #   /claude-sub/state_json   Claude login (written/refreshed by claude-sub)
+#   /claude-sub/state_json_personal  personal Claude login (sign in once on any VM at :8789)
 #   /vm-defaults/GH_TOKEN    GitHub PAT
+#   /vm-defaults/OLLAMA_API_KEY  Ollama Cloud key (models: ollama-models.json)
 set -eu
 
 INFISICAL_URL=${INFISICAL_URL:-https://infisical.int.exe.xyz}
@@ -56,6 +58,25 @@ $SUDO install -m 0755 "$DIR/vm-git-credential" /usr/local/bin/vm-git-credential
 
 echo "setup: claude-sub"
 $SUDO sh "$DIR/install.sh" --infisical
+
+echo "setup: personal Claude account (second instance, port 8789)"
+# Separate login, port, state and Infisical secret (state_json_personal). Sign in
+# once at the printed URL; every other VM then restores it automatically.
+$SUDO env CLAUDE_SUB_INSTANCE=personal CLAUDE_SUB_PORT=8789 CLAUDE_SUB_DISPLAY="Claude Opus (personal)" \
+	sh "$DIR/install.sh" --infisical || echo "    personal instance failed (continuing)" >&2
+
+echo "setup: Ollama models"
+if OLLAMA_API_KEY=$(/usr/local/bin/vm-secret OLLAMA_API_KEY) && [ -n "$OLLAMA_API_KEY" ]; then
+	export OLLAMA_API_KEY
+	for i in $(seq 1 60); do
+		curl -fsS -o /dev/null -H "X-Exedev-Userid: claude-sub" "${CLAUDE_SUB_SHELLEY:-http://127.0.0.1:9999}/api/models" && break
+		sleep 2
+	done
+	/usr/local/bin/claude-sub register-openai -shelley "${CLAUDE_SUB_SHELLEY:-http://127.0.0.1:9999}" \
+		-endpoint https://ollama.com/v1 -models "$DIR/ollama-models.json" || echo "    ollama registration failed (continuing)" >&2
+else
+	echo "    could not read /vm-defaults/OLLAMA_API_KEY" >&2
+fi
 
 echo "setup: GitHub PAT"
 if GH_TOKEN_VALUE=$(/usr/local/bin/vm-secret GH_TOKEN) && [ -n "$GH_TOKEN_VALUE" ]; then

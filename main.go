@@ -27,6 +27,8 @@ func main() {
 		err = runServe(args)
 	case "register":
 		err = runRegister(args)
+	case "register-openai":
+		err = runRegisterOpenAI(args)
 	case "status":
 		err = runStatus(args)
 	case "models":

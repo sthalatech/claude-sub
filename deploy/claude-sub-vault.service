@@ -1,14 +1,15 @@
 [Unit]
-Description=claude-sub: publish refreshed tokens to the token vault
+Description=claude-sub@SFX@: publish refreshed tokens to the token vault
 Documentation=https://github.com/sthalatech/claude-sub
-After=claude-sub.service network-online.target
+After=claude-sub@SFX@.service network-online.target
 
 [Service]
 Type=oneshot
 User=@LOGIN_USER@
 Group=@LOGIN_GROUP@
-StateDirectory=claude-sub
-Environment=CLAUDE_SUB_STATE=/var/lib/claude-sub
+StateDirectory=claude-sub@SFX@
+Environment=CLAUDE_SUB_STATE=/var/lib/claude-sub@SFX@
 EnvironmentFile=-/etc/claude-sub/infisical.env
+Environment=INFISICAL_SECRET_NAME=@SECRET_NAME@
 ExecStart=/usr/local/bin/claude-sub vault-sync
 TimeoutStartSec=120
