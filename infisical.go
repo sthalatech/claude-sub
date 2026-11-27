@@ -38,11 +38,14 @@ type tokenVault interface {
 // INFISICAL_CLIENT_ID + INFISICAL_CLIENT_SECRET (Universal Auth).
 type infisicalVault struct {
 	base, project, env, path, name string
-	token, clientID, clientSecret  string
-	statePath                      string
-	hc                             *http.Client
-	tok                            string
-	tokExp                         time.Time
+	// projectParam is the name Infisical expects for the project: workspaceId
+	// on older servers, projectId on newer ones.
+	projectParam                  string
+	token, clientID, clientSecret string
+	statePath                     string
+	hc                            *http.Client
+	tok                           string
+	tokExp                        time.Time
 }
 
 func newInfisicalVault(stateDir string) *infisicalVault {
@@ -62,6 +65,7 @@ func newInfisicalVault(stateDir string) *infisicalVault {
 		env:          get("INFISICAL_ENVIRONMENT", "prod"),
 		path:         get("INFISICAL_SECRET_PATH", "/claude-sub"),
 		name:         get("INFISICAL_SECRET_NAME", "state_json"),
+		projectParam: get("INFISICAL_PROJECT_PARAM", "workspaceId"),
 		token:        os.Getenv("INFISICAL_TOKEN"),
 		clientID:     os.Getenv("INFISICAL_CLIENT_ID"),
 		clientSecret: os.Getenv("INFISICAL_CLIENT_SECRET"),
@@ -132,7 +136,7 @@ func (v *infisicalVault) do(method, p string, q url.Values, payload any) (int, [
 }
 
 func (v *infisicalVault) scope() url.Values {
-	return url.Values{"workspaceId": {v.project}, "environment": {v.env}, "secretPath": {v.path}}
+	return url.Values{v.projectParam: {v.project}, "environment": {v.env}, "secretPath": {v.path}}
 }
 
 // read returns the stored state.json ("" when the secret does not exist yet).
@@ -160,7 +164,7 @@ func (v *infisicalVault) read() (string, error) {
 
 func (v *infisicalVault) write(value string, exists bool) error {
 	body := map[string]any{
-		"workspaceId": v.project, "environment": v.env, "secretPath": v.path,
+		v.projectParam: v.project, "environment": v.env, "secretPath": v.path,
 		"secretValue": value, "type": "shared",
 	}
 	method := "POST"
@@ -193,7 +197,7 @@ func (v *infisicalVault) ensureFolder() error {
 			continue
 		}
 		code, b, err := v.do("POST", "/api/v1/folders", nil, map[string]string{
-			"workspaceId": v.project, "environment": v.env, "name": seg, "path": cur,
+			v.projectParam: v.project, "environment": v.env, "name": seg, "path": cur,
 		})
 		if err != nil {
 			return err

@@ -108,3 +108,44 @@ func TestInfisicalVaultNoAuthIsEdgeInjected(t *testing.T) {
 		t.Fatalf("empty vault restore = %v, %v", done, err)
 	}
 }
+
+// Newer Infisical servers renamed the project parameter to projectId; the vault
+// must be able to speak that dialect too.
+func TestInfisicalProjectParamDialect(t *testing.T) {
+	var gotQuery, gotBody bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			gotQuery = r.URL.Query().Get("projectId") == "p" && r.URL.Query().Get("workspaceId") == ""
+			http.Error(w, `{"message":"not found"}`, http.StatusNotFound)
+			return
+		}
+		var b map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&b)
+		gotBody = b["projectId"] == "p" && b["workspaceId"] == nil
+		w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	t.Setenv("INFISICAL_URL", srv.URL)
+	t.Setenv("INFISICAL_PROJECT_ID", "p")
+	t.Setenv("INFISICAL_PROJECT_PARAM", "projectId")
+	t.Setenv("INFISICAL_SECRET_PATH", "/")
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "state.json"), []byte(`{"refresh_token":"r"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	v, err := openVault("", dir)
+	if err != nil || v == nil {
+		t.Fatalf("openVault: %v %v", v, err)
+	}
+	if s, err := v.Sync(false); err != nil || s != "pushed" {
+		t.Fatalf("sync = %q, %v", s, err)
+	}
+	if !gotQuery {
+		t.Error("read did not send projectId")
+	}
+	if !gotBody {
+		t.Error("write did not send projectId")
+	}
+}

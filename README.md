@@ -132,6 +132,10 @@ works, point Shelley's custom model endpoint at
 `https://claude-sub.int.exe.xyz` instead of the local proxy, and the local
 service is only needed for the system-prompt shim.
 
+Newer Infisical servers renamed the project parameter from `workspaceId` to
+`projectId`; set `INFISICAL_PROJECT_PARAM=projectId` (default `workspaceId`) for
+those.
+
 ## CLI
 
 ```
