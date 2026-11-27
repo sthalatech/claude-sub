@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// The vault is a git checkout that holds a copy of state.json, so the
+// (Legacy backend; see infisical.go.) The vault is a git checkout that holds a copy of state.json, so the
 // subscription login survives the loss of any single VM. VMs reach a private
 // vault repo through an exe.dev GitHub integration, with no credentials on the
 // VM itself.
@@ -21,7 +21,12 @@ type vault struct {
 	statePath string
 }
 
-func openVault(vaultDir, stateDir string) (*vault, error) {
+// openVault picks the backend: Infisical when INFISICAL_URL is set, otherwise
+// the legacy git checkout, otherwise none (nil).
+func openVault(vaultDir, stateDir string) (tokenVault, error) {
+	if iv := newInfisicalVault(stateDir); iv != nil {
+		return iv, nil
+	}
 	if vaultDir == "" {
 		vaultDir = filepath.Join(stateDir, "vault")
 	}

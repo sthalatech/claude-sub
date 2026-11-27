@@ -9,5 +9,6 @@ User=@LOGIN_USER@
 Group=@LOGIN_GROUP@
 StateDirectory=claude-sub
 Environment=CLAUDE_SUB_STATE=/var/lib/claude-sub
+EnvironmentFile=-/etc/claude-sub/infisical.env
 ExecStart=/usr/local/bin/claude-sub vault-sync
 TimeoutStartSec=120

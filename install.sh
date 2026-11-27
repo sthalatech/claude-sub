@@ -10,6 +10,7 @@ PORT=${CLAUDE_SUB_PORT:-8788}
 SHELLEY_URL=${CLAUDE_SUB_SHELLEY:-http://127.0.0.1:9999}
 VAULT=${CLAUDE_SUB_VAULT:-}
 REGISTER=1
+INFISICAL=0
 
 for arg in "$@"; do
 	case "$arg" in
@@ -17,6 +18,7 @@ for arg in "$@"; do
 	--port=*) PORT=${arg#*=} ;;
 	--vault=*) VAULT=${arg#*=} ;;
 	--no-vault) VAULT= ;;
+	--infisical) INFISICAL=1 ;;
 	*) echo "unknown argument: $arg" >&2; exit 2 ;;
 	esac
 done
@@ -79,11 +81,20 @@ if [ -n "$VAULT" ]; then
 	fi
 fi
 
+if [ "$INFISICAL" = 1 ] && [ ! -r /etc/claude-sub/infisical.env ]; then
+	echo "--infisical needs /etc/claude-sub/infisical.env (see setup-infisical.sh)" >&2
+	exit 1
+fi
+
 systemctl daemon-reload
 systemctl enable claude-sub.service >/dev/null 2>&1
 systemctl restart claude-sub.service >/dev/null
 
-if [ -d "$STATE_DIR/vault/.git" ]; then
+if [ "$INFISICAL" = 1 ]; then
+	runuser -u "$LOGIN_USER" -- env CLAUDE_SUB_STATE="$STATE_DIR" sh -c '. /etc/claude-sub/infisical.env; export INFISICAL_URL INFISICAL_PROJECT_ID INFISICAL_ENVIRONMENT INFISICAL_TOKEN INFISICAL_CLIENT_ID INFISICAL_CLIENT_SECRET; /usr/local/bin/claude-sub vault-sync --restore' || true
+	systemctl restart claude-sub.service >/dev/null
+	systemctl enable --now claude-sub-vault.timer >/dev/null 2>&1 && echo "==> Infisical sync timer enabled"
+elif [ -d "$STATE_DIR/vault/.git" ]; then
 	runuser -u "$LOGIN_USER" -- /usr/local/bin/claude-sub vault-sync --restore >/dev/null 2>&1 || true
 	systemctl enable --now claude-sub-vault.timer >/dev/null 2>&1 && echo "==> vault sync timer enabled"
 else
