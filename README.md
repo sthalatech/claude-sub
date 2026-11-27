@@ -171,3 +171,23 @@ with it:
 ```sh
 go test ./...
 ```
+
+## Infisical backend (replaces the git vault)
+
+Set `INFISICAL_URL` (+ `INFISICAL_PROJECT_ID`) and claude-sub stores `state.json`
+as the secret `state_json` at `INFISICAL_SECRET_PATH` (default `/claude-sub`,
+environment `INFISICAL_ENVIRONMENT`, default `prod`). `vault-sync` and the
+10-minute timer push refreshed tokens; a new VM restores the login on first start.
+Auth is optional: with an exe.dev peer integration injecting a bearer token no
+credential lives on the VM; otherwise set `INFISICAL_TOKEN` or
+`INFISICAL_CLIENT_ID`/`INFISICAL_CLIENT_SECRET`.
+
+`setup-infisical.sh` is the new-VM entry point. It writes
+`/etc/claude-sub/infisical.env`, installs claude-sub (`install.sh --infisical`),
+and points git at the GitHub PAT in Infisical (`/vm-defaults/GH_TOKEN`) via
+`vm-git-credential` (fetched on demand, never stored on disk; `gh` is logged in too).
+
+    curl -fsSL https://raw.githubusercontent.com/sthalatech/claude-sub/main/setup-infisical.sh \
+      | INFISICAL_PROJECT_ID=<id> ssh exe.dev defaults write dev.exe new.setup-script
+
+To seed from an already signed-in VM: put the env file in place, run `claude-sub vault-sync`.
