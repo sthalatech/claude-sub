@@ -3,6 +3,6 @@
 LOG=/var/log/vm-setup.log
 {
 	echo "=== vm setup $(date -u +%FT%TZ) ==="
-	curl -fsSL "https://raw.githubusercontent.com/sthalatech/claude-sub/main/setup-infisical.sh?$(date +%s)" | sh -x
+	curl -fsSL "https://raw.githubusercontent.com/sthalatech/claude-sub/main/setup-infisical.sh?$(date +%s)" | sh
 	echo "=== exit $? ==="
 } 2>&1 | { if [ -w /var/log ]; then tee -a "$LOG"; else sudo tee -a "$LOG"; fi; }
